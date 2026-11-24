@@ -43,3 +43,10 @@ npm run desktop:build           # 产物位于 src-tauri\target\release\bundle\n
 ## 与 0.3.0 的区别
 
 0.3.0 是按“代理端点 + 软件组 + 每次 UAC”设计的原型。0.4.0 面向系统级 VPN，去掉了代理配置，只监控 Codex / Claude，改为安装时一次授权、后台常驻、开机自启。
+<img width="1803" height="1471" alt="image" src="https://github.com/user-attachments/assets/0e37858d-1d69-4dd6-b1eb-e6093a2bf8a4" />检测中
+<img width="1785" height="1475" alt="image" src="https://github.com/user-attachments/assets/f5079db3-a953-4584-9434-a560ad793ae3" />放行
+<img width="1828" height="1483" alt="image" src="https://github.com/user-attachments/assets/df563efb-c394-4736-b8c6-131ecfc11f0c" />断开
+
+
+
+
