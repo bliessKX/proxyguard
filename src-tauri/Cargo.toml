@@ -1,6 +1,6 @@
 [package]
 name = "proxyguard"
-version = "0.4.0"
+version = "0.5.0"
 description = "ProxyGuard: pause Codex / Claude network access when the VPN drops"
 authors = ["ProxyGuard"]
 edition = "2021"

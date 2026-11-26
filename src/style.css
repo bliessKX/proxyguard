@@ -1,4 +1,4 @@
-/* ProxyGuard 0.4.0 — status console.
+/* ProxyGuard 0.5.0 — status console.
    Dark is the default; light follows the system setting. System fonts only. */
 
 :root {
@@ -447,6 +447,103 @@ body {
   color: var(--text);
   text-wrap: pretty;
 }
+
+/* ---------- targets: custom programs, timezone launcher ---------- */
+
+.stack { display: grid; gap: 16px; }
+
+.tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.tag-warn {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 40%, transparent);
+}
+
+.spoof-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--raise);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+.spoof-strip .rule-dot { flex: none; background: var(--amber); }
+.spoof-strip[data-tone="ok"] { color: var(--text); }
+.spoof-strip[data-tone="ok"] .rule-dot { background: var(--mint); }
+.spoof-strip[data-tone="off"] .rule-dot { background: var(--coral); }
+
+.target-ctl,
+.add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.target-ctl { margin-top: 8px; }
+.ctl-gap { flex: 1; }
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.check input { accent-color: var(--mint); }
+
+.btn-small { padding: 4px 10px; font-size: 12px; }
+.btn-quiet { color: var(--muted); }
+.btn-primary { border-color: color-mix(in srgb, var(--mint) 55%, transparent); color: var(--mint); }
+
+.add-target {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  display: grid;
+  gap: 10px;
+}
+.input {
+  flex: 1;
+  min-width: 180px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.input::placeholder { color: var(--dim); }
+.add-opts { margin-top: -2px; }
+
+.proc-pick { display: grid; gap: 8px; }
+.proc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+.proc-list li + li { border-top: 1px solid var(--line-soft); }
+.proc-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.proc-item:hover { background: var(--raise); }
+.proc-item b { font-size: 13px; font-weight: 600; }
 
 /* ---------- footer ---------- */
 

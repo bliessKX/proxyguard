@@ -1,5 +1,6 @@
+import { useState } from "react";
 import type { CSSProperties } from "react";
-import type { GuardState, GuardStatus, LogEntry } from "./types";
+import type { GuardState, GuardStatus, LogEntry, TargetActions, TargetProcess, TargetRow } from "./types";
 
 export const COUNTRIES: [string, string][] = [
   ["US", "美国"], ["JP", "日本"], ["SG", "新加坡"], ["MY", "马来西亚"], ["KR", "韩国"],
@@ -27,6 +28,7 @@ type Props = {
   busy: boolean;
   onCountryChange: (code: string) => void;
   onCheckNow: () => void;
+  actions: TargetActions;
 };
 
 function clock(secs: number): string {
@@ -120,12 +122,193 @@ function Hero({ status, onCountryChange }: Pick<Props, "status" | "onCountryChan
   );
 }
 
-function Targets({ status }: { status: GuardStatus }) {
-  const count = status.knownPaths.length;
-  const tone = status.blocked ? "block" : count > 0 ? "ok" : "idle";
+function SpoofStrip({ status }: { status: GuardStatus }) {
+  const { spoofReady, spoofTimezone, stableStreak, stableNeeded } = status;
+  let tone = "wait";
+  let text: string;
+  if (spoofReady && spoofTimezone) {
+    tone = "ok";
+    text = `时区伪装就绪：目标程序将以 ${spoofTimezone} 启动，与出口 IP 一致`;
+  } else if (status.state === "protected") {
+    text = `等待出口稳定 ${Math.min(stableStreak, stableNeeded)}/${stableNeeded}：同一 IP 连续检测通过后才允许带时区启动`;
+  } else {
+    tone = "off";
+    text = "出口不在允许范围或无法确认，暂不允许带时区启动";
+  }
+  return (
+    <div className="spoof-strip" data-tone={tone}>
+      <span className="rule-dot" aria-hidden="true" />
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function TargetItem({
+  row,
+  status,
+  actions,
+}: {
+  row: TargetRow;
+  status: GuardStatus;
+  actions: TargetActions;
+}) {
+  const launch = status.launches.find((l) => l.path.toLowerCase() === row.path.toLowerCase());
+  const stale = !!launch && !!status.spoofTimezone && launch.timezone !== status.spoofTimezone;
+  const canLaunch = row.spoof && status.spoofReady;
+  return (
+    <li>
+      <div className="target-line">
+        <b>{row.name}</b>
+        <span className="tags">
+          {row.builtin && <span className="tag">内置</span>}
+          {row.running && <span className="tag tag-live">运行中</span>}
+          {launch && !stale && <span className="tag tag-live">已用 {launch.timezone} 启动</span>}
+          {stale && <span className="tag tag-warn">出口已变，需重启</span>}
+        </span>
+      </div>
+      <span className="path mono" title={row.path}>{row.path}</span>
+      <div className="target-ctl">
+        {row.builtin ? (
+          <span className="muted">防火墙阻断：始终开启</span>
+        ) : (
+          <>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={row.guard}
+                onChange={(e) => actions.setFlags(row.path, e.target.checked, row.spoof)}
+              />
+              断网时阻断
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={row.spoof}
+                onChange={(e) => actions.setFlags(row.path, row.guard, e.target.checked)}
+              />
+              时区伪装启动
+            </label>
+          </>
+        )}
+        <span className="ctl-gap" />
+        <button
+          className="btn btn-small"
+          type="button"
+          disabled={!canLaunch}
+          title={canLaunch ? "" : "需要开启时区伪装，且出口稳定在允许国家"}
+          onClick={() => actions.launch(row.path)}
+        >
+          {status.spoofTimezone ? `以 ${status.spoofTimezone} 启动` : "带时区启动"}
+        </button>
+        {!row.builtin && (
+          <button className="btn btn-small btn-quiet" type="button" onClick={() => actions.remove(row.path)}>
+            移除
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function AddTarget({ status, actions }: { status: GuardStatus; actions: TargetActions }) {
+  const [path, setPath] = useState("");
+  const [guard, setGuard] = useState(true);
+  const [spoof, setSpoof] = useState(true);
+  const [procs, setProcs] = useState<TargetProcess[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  async function browse() {
+    const picked = await actions.pickFile();
+    if (picked) setPath(picked);
+  }
+
+  async function submit() {
+    if (await actions.add(path, guard, spoof)) setPath("");
+  }
+
+  async function toggleProcs() {
+    if (procs) {
+      setProcs(null);
+      return;
+    }
+    setLoading(true);
+    setProcs(await actions.listProcesses());
+    setLoading(false);
+  }
+
+  const registered = new Set(status.targets.map((t) => t.path.toLowerCase()));
+  const q = filter.trim().toLowerCase();
+  const shown = (procs ?? []).filter(
+    (p) => !registered.has(p.path.toLowerCase()) && (!q || `${p.name} ${p.path}`.toLowerCase().includes(q)),
+  );
+
+  return (
+    <div className="add-target">
+      <div className="add-row">
+        <input
+          className="input mono"
+          value={path}
+          placeholder="程序完整路径，例如 C:\Tools\app.exe"
+          spellCheck={false}
+          onChange={(e) => setPath(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+        />
+        <button className="btn" type="button" onClick={browse}>浏览…</button>
+        <button className="btn btn-primary" type="button" onClick={submit} disabled={!path.trim()}>
+          添加
+        </button>
+      </div>
+      <div className="add-row add-opts">
+        <label className="check">
+          <input type="checkbox" checked={guard} onChange={(e) => setGuard(e.target.checked)} />
+          断网时阻断
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={spoof} onChange={(e) => setSpoof(e.target.checked)} />
+          时区伪装启动
+        </label>
+        <span className="ctl-gap" />
+        <button className="btn btn-small" type="button" onClick={toggleProcs} disabled={loading}>
+          {loading ? "读取中…" : procs ? "收起进程列表" : "从运行中的进程选择"}
+        </button>
+      </div>
+
+      {procs && (
+        <div className="proc-pick">
+          <input
+            className="input"
+            value={filter}
+            placeholder="按名称或路径筛选"
+            onChange={(e) => setFilter(e.target.value)}
+          />
+          {shown.length === 0 ? (
+            <p className="empty">没有可添加的运行中程序。</p>
+          ) : (
+            <ul className="proc-list">
+              {shown.slice(0, 60).map((p) => (
+                <li key={p.path}>
+                  <button type="button" className="proc-item" onClick={() => setPath(p.path)} title={p.path}>
+                    <b>{p.name}</b>
+                    <span className="path mono">{p.path}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Targets({ status, actions }: { status: GuardStatus; actions: TargetActions }) {
+  const rows = status.targets;
+  const guarded = rows.filter((r) => r.guard).length;
+  const tone = status.blocked ? "block" : guarded > 0 ? "ok" : "idle";
   const toneText = status.blocked
     ? "阻断规则已生效"
-    : count > 0
+    : guarded > 0
       ? "未阻断"
       : "尚未登记程序路径";
 
@@ -133,21 +316,17 @@ function Targets({ status }: { status: GuardStatus }) {
     <section className="panel" aria-labelledby="targets-title">
       <div className="panel-head">
         <h3 id="targets-title" className="panel-title">目标程序</h3>
-        <span className="muted">codex.exe · claude.exe</span>
+        <span className="muted">内置 codex.exe · claude.exe，可自行添加</span>
       </div>
 
-      {status.running.length === 0 ? (
-        <p className="empty">没有运行中的 Codex 或 Claude。</p>
+      <SpoofStrip status={status} />
+
+      {rows.length === 0 ? (
+        <p className="empty">还没有目标程序。启动一次 Codex / Claude 会自动登记，也可以在下方添加任意程序。</p>
       ) : (
         <ul className="targets">
-          {status.running.map((t) => (
-            <li key={t.path}>
-              <div className="target-line">
-                <b>{t.name}.exe</b>
-                <span className="tag tag-live">运行中</span>
-              </div>
-              <span className="path mono" title={t.path}>{t.path}</span>
-            </li>
+          {rows.map((r) => (
+            <TargetItem key={r.path} row={r} status={status} actions={actions} />
           ))}
         </ul>
       )}
@@ -155,19 +334,10 @@ function Targets({ status }: { status: GuardStatus }) {
       <div className="rule-line" data-tone={tone}>
         <span className="rule-dot" aria-hidden="true" />
         <span>{toneText}</span>
-        <span className="muted">已登记 {count} 个路径</span>
+        <span className="muted">阻断 {guarded} 个 · 共 {rows.length} 个程序</span>
       </div>
 
-      {count > 0 && (
-        <details className="known">
-          <summary>查看已登记路径</summary>
-          <ul>
-            {status.knownPaths.map((p) => (
-              <li key={p} className="mono">{p}</li>
-            ))}
-          </ul>
-        </details>
-      )}
+      <AddTarget status={status} actions={actions} />
     </section>
   );
 }
@@ -195,14 +365,14 @@ function Events({ logs }: { logs: LogEntry[] }) {
   );
 }
 
-export function Dashboard({ status, error, busy, onCountryChange, onCheckNow }: Props) {
+export function Dashboard({ status, error, busy, onCountryChange, onCheckNow, actions }: Props) {
   return (
     <div className="app" data-state={status.state}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
           <span className="brand-name">ProxyGuard</span>
-          <span className="brand-ver mono">0.4.0</span>
+          <span className="brand-ver mono">0.5.0</span>
         </div>
         <button className="btn" type="button" onClick={onCheckNow} disabled={busy}>
           {busy ? "检测中…" : "立即检测"}
@@ -213,13 +383,13 @@ export function Dashboard({ status, error, busy, onCountryChange, onCheckNow }: 
 
       <Hero status={status} onCountryChange={onCountryChange} />
 
-      <div className="columns">
-        <Targets status={status} />
+      <div className="stack">
+        <Targets status={status} actions={actions} />
         <Events logs={status.logs} />
       </div>
 
       <footer className="foot">
-        守护随登录自动运行，关闭窗口后在托盘中继续。阻断依靠 Windows 防火墙规则，安装时的管理员授权即用于此。
+        守护随登录自动运行，关闭窗口后在托盘中继续。阻断依靠 Windows 防火墙规则，安装时的管理员授权即用于此。时区伪装只作用于通过 ProxyGuard 启动的进程，不修改系统时区，也不改变真实出口 IP。
       </footer>
     </div>
   );
